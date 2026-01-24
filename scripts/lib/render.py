@@ -100,7 +100,7 @@ def render_compact(report: schema.Report, limit: int = 15) -> str:
         lines.append("")
         lines.append(f"**ERROR:** {report.x_error}")
         lines.append("")
-    elif report.mode in ("both", "x-only") and not report.x:
+    elif report.mode in ("both", "x-only", "all", "x-web") and not report.x:
         lines.append("### X Posts")
         lines.append("")
         lines.append("*No relevant X posts found for this topic.*")
@@ -126,6 +126,26 @@ def render_compact(report: schema.Report, limit: int = 15) -> str:
             lines.append(f"**{item.id}** (score:{item.score}) @{item.author_handle}{date_str}{conf_str}{eng_str}")
             lines.append(f"  {item.text[:200]}...")
             lines.append(f"  {item.url}")
+            lines.append(f"  *{item.why_relevant}*")
+            lines.append("")
+
+    # Web items (if any - populated by Claude)
+    if report.web_error:
+        lines.append("### Web Results")
+        lines.append("")
+        lines.append(f"**ERROR:** {report.web_error}")
+        lines.append("")
+    elif report.web:
+        lines.append("### Web Results")
+        lines.append("")
+        for item in report.web[:limit]:
+            date_str = f" ({item.date})" if item.date else " (date unknown)"
+            conf_str = f" [date:{item.date_confidence}]" if item.date_confidence != "high" else ""
+
+            lines.append(f"**{item.id}** [WEB] (score:{item.score}) {item.source_domain}{date_str}{conf_str}")
+            lines.append(f"  {item.title}")
+            lines.append(f"  {item.url}")
+            lines.append(f"  {item.snippet[:150]}...")
             lines.append(f"  *{item.why_relevant}*")
             lines.append("")
 
@@ -156,6 +176,8 @@ def render_context_snippet(report: schema.Report) -> str:
         all_items.append((item.score, "Reddit", item.title, item.url))
     for item in report.x[:5]:
         all_items.append((item.score, "X", item.text[:50] + "...", item.url))
+    for item in report.web[:5]:
+        all_items.append((item.score, "Web", item.title[:50] + "...", item.url))
 
     all_items.sort(key=lambda x: -x[0])
     for score, source, text, url in all_items[:7]:
@@ -241,6 +263,22 @@ def render_full_report(report: schema.Report) -> str:
 
             lines.append("")
             lines.append(f"> {item.text}")
+            lines.append("")
+
+    # Web section
+    if report.web:
+        lines.append("## Web Results")
+        lines.append("")
+        for item in report.web:
+            lines.append(f"### {item.id}: {item.title}")
+            lines.append("")
+            lines.append(f"- **Source:** {item.source_domain}")
+            lines.append(f"- **URL:** {item.url}")
+            lines.append(f"- **Date:** {item.date or 'Unknown'} (confidence: {item.date_confidence})")
+            lines.append(f"- **Score:** {item.score}/100")
+            lines.append(f"- **Relevance:** {item.why_relevant}")
+            lines.append("")
+            lines.append(f"> {item.snippet}")
             lines.append("")
 
     # Placeholders for Claude synthesis

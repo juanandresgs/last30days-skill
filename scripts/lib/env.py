@@ -57,7 +57,7 @@ def config_exists() -> bool:
 def get_available_sources(config: Dict[str, Any]) -> str:
     """Determine which sources are available based on API keys.
 
-    Returns: 'both', 'reddit', 'x', or 'none'
+    Returns: 'both', 'reddit', 'x', or 'web' (fallback when no keys)
     """
     has_openai = bool(config.get('OPENAI_API_KEY'))
     has_xai = bool(config.get('XAI_API_KEY'))
@@ -69,34 +69,63 @@ def get_available_sources(config: Dict[str, Any]) -> str:
     elif has_xai:
         return 'x'
     else:
-        return 'none'
+        return 'web'  # Fallback: WebSearch only (no API keys needed)
 
 
-def validate_sources(requested: str, available: str) -> tuple[str, Optional[str]]:
+def validate_sources(requested: str, available: str, include_web: bool = False) -> tuple[str, Optional[str]]:
     """Validate requested sources against available keys.
 
     Args:
-        requested: 'auto', 'reddit', 'x', or 'both'
+        requested: 'auto', 'reddit', 'x', 'both', or 'web'
         available: Result from get_available_sources()
+        include_web: If True, add WebSearch to available sources
 
     Returns:
         Tuple of (effective_sources, error_message)
     """
-    if available == 'none':
-        return 'none', "No API keys configured. Please add at least one key to ~/.config/last30days/.env"
+    # WebSearch-only mode (no API keys)
+    if available == 'web':
+        if requested == 'auto':
+            return 'web', None
+        elif requested == 'web':
+            return 'web', None
+        else:
+            return 'web', f"No API keys configured. Using WebSearch fallback. Add keys to ~/.config/last30days/.env for Reddit/X."
 
     if requested == 'auto':
+        # Add web to sources if include_web is set
+        if include_web:
+            if available == 'both':
+                return 'all', None  # reddit + x + web
+            elif available == 'reddit':
+                return 'reddit-web', None
+            elif available == 'x':
+                return 'x-web', None
         return available, None
 
+    if requested == 'web':
+        return 'web', None
+
     if requested == 'both':
-        if available != 'both':
+        if available not in ('both',):
             missing = 'xAI' if available == 'reddit' else 'OpenAI'
             return 'none', f"Requested both sources but {missing} key is missing. Use --sources=auto to use available keys."
+        if include_web:
+            return 'all', None
+        return 'both', None
 
-    if requested == 'reddit' and available == 'x':
-        return 'none', "Requested Reddit but only xAI key is available."
+    if requested == 'reddit':
+        if available == 'x':
+            return 'none', "Requested Reddit but only xAI key is available."
+        if include_web:
+            return 'reddit-web', None
+        return 'reddit', None
 
-    if requested == 'x' and available == 'reddit':
-        return 'none', "Requested X but only OpenAI key is available."
+    if requested == 'x':
+        if available == 'reddit':
+            return 'none', "Requested X but only OpenAI key is available."
+        if include_web:
+            return 'x-web', None
+        return 'x', None
 
     return requested, None

@@ -38,6 +38,7 @@ from lib import (
     schema,
     score,
     ui,
+    websearch,
     xai_x,
 )
 
@@ -65,7 +66,10 @@ def run_research(
     """Run the research pipeline.
 
     Returns:
-        Tuple of (reddit_items, x_items, raw_openai, raw_xai, raw_reddit_enriched, reddit_error, x_error)
+        Tuple of (reddit_items, x_items, web_needed, raw_openai, raw_xai, raw_reddit_enriched, reddit_error, x_error)
+
+    Note: web_needed is True when WebSearch should be performed by Claude.
+    The script outputs a marker and Claude handles WebSearch in its session.
     """
     reddit_items = []
     x_items = []
@@ -75,8 +79,11 @@ def run_research(
     reddit_error = None
     x_error = None
 
+    # Check if WebSearch is needed
+    web_needed = sources in ("all", "web", "reddit-web", "x-web")
+
     # Reddit search via OpenAI
-    if sources in ("both", "reddit"):
+    if sources in ("both", "reddit", "all", "reddit-web"):
         if progress:
             progress.start_reddit()
 
@@ -128,7 +135,7 @@ def run_research(
                 progress.end_reddit_enrich()
 
     # X search via xAI
-    if sources in ("both", "x"):
+    if sources in ("both", "x", "all", "x-web"):
         if progress:
             progress.start_x()
 
@@ -161,7 +168,7 @@ def run_research(
         if progress:
             progress.end_x(len(x_items))
 
-    return reddit_items, x_items, raw_openai, raw_xai, raw_reddit_enriched, reddit_error, x_error
+    return reddit_items, x_items, web_needed, raw_openai, raw_xai, raw_reddit_enriched, reddit_error, x_error
 
 
 def main():
@@ -197,6 +204,11 @@ def main():
         action="store_true",
         help="Enable verbose debug logging",
     )
+    parser.add_argument(
+        "--include-web",
+        action="store_true",
+        help="Include general web search alongside Reddit/X (lower weighted)",
+    )
 
     args = parser.parse_args()
 
@@ -228,12 +240,6 @@ def main():
 
     # Check available sources
     available = env.get_available_sources(config)
-    if available == "none" and not args.mock:
-        print("Error: No API keys configured.", file=sys.stderr)
-        print("Please add at least one key to ~/.config/last30days/.env:", file=sys.stderr)
-        print("  OPENAI_API_KEY=sk-...", file=sys.stderr)
-        print("  XAI_API_KEY=xai-...", file=sys.stderr)
-        sys.exit(1)
 
     # Mock mode can work without keys
     if args.mock:
@@ -243,10 +249,14 @@ def main():
             sources = args.sources
     else:
         # Validate requested sources against available
-        sources, error = env.validate_sources(args.sources, available)
+        sources, error = env.validate_sources(args.sources, available, args.include_web)
         if error:
-            print(f"Error: {error}", file=sys.stderr)
-            sys.exit(1)
+            # If it's a warning about WebSearch fallback, print but continue
+            if "WebSearch fallback" in error:
+                print(f"Note: {error}", file=sys.stderr)
+            else:
+                print(f"Error: {error}", file=sys.stderr)
+                sys.exit(1)
 
     # Get date range
     from_date, to_date = dates.get_date_range(30)
@@ -272,15 +282,25 @@ def main():
         selected_models = models.get_models(config)
 
     # Determine mode string
-    if sources == "both":
-        mode = "both"
+    if sources == "all":
+        mode = "all"  # reddit + x + web
+    elif sources == "both":
+        mode = "both"  # reddit + x
     elif sources == "reddit":
         mode = "reddit-only"
-    else:
+    elif sources == "reddit-web":
+        mode = "reddit-web"
+    elif sources == "x":
         mode = "x-only"
+    elif sources == "x-web":
+        mode = "x-web"
+    elif sources == "web":
+        mode = "web-only"
+    else:
+        mode = sources
 
     # Run research
-    reddit_items, x_items, raw_openai, raw_xai, raw_reddit_enriched, reddit_error, x_error = run_research(
+    reddit_items, x_items, web_needed, raw_openai, raw_xai, raw_reddit_enriched, reddit_error, x_error = run_research(
         args.topic,
         sources,
         config,
@@ -337,10 +357,17 @@ def main():
     progress.show_complete(len(deduped_reddit), len(deduped_x))
 
     # Output result
-    output_result(report, args.emit)
+    output_result(report, args.emit, web_needed, args.topic, from_date, to_date)
 
 
-def output_result(report: schema.Report, emit_mode: str):
+def output_result(
+    report: schema.Report,
+    emit_mode: str,
+    web_needed: bool = False,
+    topic: str = "",
+    from_date: str = "",
+    to_date: str = "",
+):
     """Output the result based on emit mode."""
     if emit_mode == "compact":
         print(render.render_compact(report))
@@ -352,6 +379,23 @@ def output_result(report: schema.Report, emit_mode: str):
         print(report.context_snippet_md)
     elif emit_mode == "path":
         print(render.get_context_path())
+
+    # Output WebSearch instructions if needed
+    if web_needed:
+        print("\n" + "="*60)
+        print("### WEBSEARCH REQUIRED ###")
+        print("="*60)
+        print(f"Topic: {topic}")
+        print(f"Date range: {from_date} to {to_date}")
+        print("")
+        print("Claude: Use your WebSearch tool to find 8-15 relevant web pages.")
+        print("EXCLUDE: reddit.com, x.com, twitter.com (already covered above)")
+        print("INCLUDE: blogs, docs, news, tutorials from the last 30 days")
+        print("")
+        print("After searching, synthesize WebSearch results WITH the Reddit/X")
+        print("results above. WebSearch items should rank LOWER than comparable")
+        print("Reddit/X items (they lack engagement metrics).")
+        print("="*60)
 
 
 if __name__ == "__main__":

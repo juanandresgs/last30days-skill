@@ -5,10 +5,15 @@ from typing import List, Optional, Union
 
 from . import dates, schema
 
-# Score weights
+# Score weights for Reddit/X (has engagement)
 WEIGHT_RELEVANCE = 0.45
 WEIGHT_RECENCY = 0.25
 WEIGHT_ENGAGEMENT = 0.30
+
+# WebSearch weights (no engagement, reweighted to 100%)
+WEBSEARCH_WEIGHT_RELEVANCE = 0.55
+WEBSEARCH_WEIGHT_RECENCY = 0.45
+WEBSEARCH_SOURCE_PENALTY = 15  # Points deducted for lacking engagement
 
 # Default engagement score for unknown
 DEFAULT_ENGAGEMENT = 35
@@ -212,7 +217,56 @@ def score_x_items(items: List[schema.XItem]) -> List[schema.XItem]:
     return items
 
 
-def sort_items(items: List[Union[schema.RedditItem, schema.XItem]]) -> List:
+def score_websearch_items(items: List[schema.WebSearchItem]) -> List[schema.WebSearchItem]:
+    """Compute scores for WebSearch items WITHOUT engagement metrics.
+
+    Uses reweighted formula: 55% relevance + 45% recency - 15pt source penalty.
+    This ensures WebSearch items rank below comparable Reddit/X items.
+
+    Args:
+        items: List of WebSearch items
+
+    Returns:
+        Items with updated scores
+    """
+    if not items:
+        return items
+
+    for item in items:
+        # Relevance subscore (model-provided, convert to 0-100)
+        rel_score = int(item.relevance * 100)
+
+        # Recency subscore
+        rec_score = dates.recency_score(item.date)
+
+        # Store subscores (engagement is 0 for WebSearch - no data)
+        item.subs = schema.SubScores(
+            relevance=rel_score,
+            recency=rec_score,
+            engagement=0,  # Explicitly zero - no engagement data available
+        )
+
+        # Compute overall score using WebSearch weights
+        overall = (
+            WEBSEARCH_WEIGHT_RELEVANCE * rel_score +
+            WEBSEARCH_WEIGHT_RECENCY * rec_score
+        )
+
+        # Apply source penalty (WebSearch < Reddit/X for same relevance/recency)
+        overall -= WEBSEARCH_SOURCE_PENALTY
+
+        # Apply penalty for low date confidence
+        if item.date_confidence == "low":
+            overall -= 10
+        elif item.date_confidence == "med":
+            overall -= 5
+
+        item.score = max(0, min(100, int(overall)))
+
+    return items
+
+
+def sort_items(items: List[Union[schema.RedditItem, schema.XItem, schema.WebSearchItem]]) -> List:
     """Sort items by score (descending), then date, then source priority.
 
     Args:
@@ -229,8 +283,13 @@ def sort_items(items: List[Union[schema.RedditItem, schema.XItem]]) -> List:
         date = item.date or "0000-00-00"
         date_key = -int(date.replace("-", ""))
 
-        # Tertiary: source priority (Reddit before X)
-        source_priority = 0 if isinstance(item, schema.RedditItem) else 1
+        # Tertiary: source priority (Reddit > X > WebSearch)
+        if isinstance(item, schema.RedditItem):
+            source_priority = 0
+        elif isinstance(item, schema.XItem):
+            source_priority = 1
+        else:  # WebSearchItem
+            source_priority = 2
 
         # Quaternary: title/text for stability
         text = getattr(item, "title", "") or getattr(item, "text", "")
