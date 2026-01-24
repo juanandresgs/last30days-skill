@@ -92,18 +92,21 @@ echo "Please edit it to add your API keys, then run the skill again."
 
 **IMPORTANT: Run Reddit/X script IN BACKGROUND first, then WebSearch.** This way both run in parallel.
 
-**Step 1: Start Reddit/X script in background** (runs first, shows progress)
+**Step 1: Display the research banner immediately:**
+```
+🔍 Researching "{TOPIC}" across the last 30 days...
+
+🚀 Deploying research agents...
+├─ 🟠 Reddit Agent: Scanning subreddits for discussions...
+├─ 🔵 X Agent: Following the conversation on X...
+└─ 🌐 Web Agent: Searching blogs, docs, and news...
+```
+
+**Step 2: Start Reddit/X script in background**
 ```bash
 python3 ~/.claude/skills/last30days/scripts/last30days.py "$ARGUMENTS" --emit=compact 2>&1
 ```
 Use `run_in_background: true` so it starts immediately and runs while we do WebSearch.
-
-The script displays progress:
-```
-🚀 Deploying research agents...
-├─ 🟠 Reddit Agent: Scanning subreddits for discussions...
-└─ 🔵 X Agent: Following the conversation on X...
-```
 
 **Step 2: While script runs, do WebSearch**
 
