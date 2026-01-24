@@ -135,6 +135,10 @@ Choose search queries based on QUERY_TYPE:
 - Goal: Find what people are actually saying
 
 For ALL query types:
+- **USE THE USER'S EXACT TERMINOLOGY** - don't substitute or add tech names based on your knowledge
+  - If user says "ChatGPT image prompting", search for "ChatGPT image prompting"
+  - Do NOT add "DALL-E", "GPT-4o", or other terms you think are related
+  - Your knowledge may be outdated - trust the user's terminology
 - EXCLUDE reddit.com, x.com, twitter.com (covered by script)
 - INCLUDE: blogs, tutorials, docs, news, GitHub repos
 - **DO NOT output "Sources:" list** - this is noise, we'll show stats at the end
