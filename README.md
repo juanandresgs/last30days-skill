@@ -277,6 +277,69 @@ This prompt was generated based on research from 10 Reddit threads (294 upvotes)
 
 ---
 
+## Example: Photorealistic Portraits (Aging Grid)
+
+**Query:** `/last30days photorealistic people in nano banana pro`
+
+**Research Output:**
+> JSON prompts are the dominant format for photorealistic people in Nano Banana Pro. Nearly every viral X post (4,400+ likes total) uses structured JSON with specific fields rather than natural language. The key is specifying demographics, skin texture, lighting, and camera settings in a structured way.
+>
+> Recent caveat: Reddit reports Nano Banana Pro was "nerfed" in early January 2026 with reduced resolution and stricter moderation on faces. Starting a new chat can help if quality drops mid-session.
+
+**Key patterns discovered:**
+1. JSON structure with prompt_type, subject, lighting, camera_settings fields
+2. Skin texture keywords: "natural pores", "realistic skin texture", "8K texture quality"
+3. Face preservation: "preserve_original": true when using reference photos
+4. Camera realism: specify lens (85mm f/1.4), depth of field, lighting setup
+5. Wet skin close-ups are trending for maximum realism
+6. Negative prompts: "no cartoon effect, no distortion, correct anatomy"
+
+**Then asked:** "2x2 grid of the same person at age 10, 20, 40 and 80 - a woman with brown hair and a lot of freckles and cat eyes that are a different color"
+
+**Generated Prompt:**
+
+```json
+{
+  "prompt_type": "Ultra-Photorealistic Multi-Panel Portrait",
+  "layout": "2x2 grid, seamless white dividers",
+  "aspect_ratio": "1:1",
+  "consistency": {
+    "same_person": true,
+    "preserve_features": ["bone structure", "freckle pattern", "eye shape", "heterochromia"]
+  },
+  "subject": {
+    "identity": "Same woman shown at 4 life stages",
+    "distinctive_features": {
+      "eyes": "Almond-shaped cat eyes with heterochromia - one green, one amber",
+      "skin": "Fair complexion densely covered in natural freckles across nose, cheeks, and forehead",
+      "hair": "Brown hair, natural texture"
+    }
+  },
+  "panels": [
+    {"position": "top-left", "age": 10, "expression": "curious childhood smile", "hair": "long brown hair with bangs"},
+    {"position": "top-right", "age": 20, "expression": "confident young adult", "hair": "shoulder-length brown hair"},
+    {"position": "bottom-left", "age": 40, "expression": "warm maternal gaze", "hair": "brown hair with subtle highlights"},
+    {"position": "bottom-right", "age": 80, "expression": "wise gentle smile", "hair": "silver-gray, formerly brown"}
+  ],
+  "lighting": "Soft natural window light, consistent across all panels",
+  "camera": "85mm portrait lens, shallow depth of field, neutral background",
+  "texture_quality": "8K, natural skin texture with visible pores, realistic freckle detail",
+  "negative": "no cartoon effect, no airbrushed skin, no symmetrical freckles, maintain heterochromia in all panels"
+}
+```
+
+**The Result:**
+
+<p align="center">
+  <img src="assets/aging-portrait.jpeg" width="500" alt="Aging portrait grid - same woman at 10, 20, 40, and 80"/>
+</p>
+
+Same freckles. Same heterochromia. Same bone structure. Four life stages in one coherent image.
+
+This example shows /last30days learning **advanced image generation patterns** (multi-panel consistency, face preservation across variations) and applying them to create a complex composite image.
+
+---
+
 ## Example: Best Rap Songs Right Now
 
 **Query:** `/last30days What are the best rap songs lately`

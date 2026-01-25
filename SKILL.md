@@ -13,7 +13,7 @@ allowed-tools: Bash, Read, Write, AskUserQuestion, WebSearch
 Research ANY topic across Reddit, X, and the web. Surface what people are actually discussing, recommending, and debating right now.
 
 Use cases:
-- **Prompting**: "Midjourney prompts", "ChatGPT image generation" → learn techniques, get copy-paste prompts
+- **Prompting**: "photorealistic people in Nano Banana Pro", "Midjourney prompts", "ChatGPT image generation" → learn techniques, get copy-paste prompts
 - **Recommendations**: "best Claude Code skills", "top AI tools" → get a LIST of specific things people mention
 - **News**: "what's happening with OpenAI", "latest AI announcements" → current events and updates
 - **General**: any topic you're curious about → understand what the community is saying
