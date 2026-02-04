@@ -18,6 +18,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
@@ -25,6 +26,11 @@ from pathlib import Path
 # Add lib to path
 SCRIPT_DIR = Path(__file__).parent.resolve()
 sys.path.insert(0, str(SCRIPT_DIR))
+
+# @decision Inter-request delay for Reddit enrichment — Reddit rate-limits
+# unauthenticated requests to ~10/min. 2s delay between fetches keeps us
+# well under that ceiling. Adds ~60s for 30 items but prevents 429 failures.
+REDDIT_ENRICH_DELAY = 2.0
 
 from lib import (
     dates,
@@ -254,6 +260,10 @@ def run_research(
         for i, item in enumerate(reddit_items):
             if progress and i > 0:
                 progress.update_reddit_enrich(i + 1, len(reddit_items))
+
+            # Rate-limit Reddit fetches (skip delay for first item and mock mode)
+            if i > 0 and not mock:
+                time.sleep(REDDIT_ENRICH_DELAY)
 
             try:
                 if mock:

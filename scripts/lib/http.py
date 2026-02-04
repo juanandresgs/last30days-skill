@@ -2,6 +2,7 @@
 
 import json
 import os
+import random
 import sys
 import time
 import urllib.error
@@ -19,16 +20,49 @@ def log(msg: str):
         sys.stderr.write(f"[DEBUG] {msg}\n")
         sys.stderr.flush()
 MAX_RETRIES = 3
-RETRY_DELAY = 1.0
+RETRY_BASE_DELAY = 2.0
+RETRY_429_BASE_DELAY = 5.0
+RETRY_MAX_DELAY = 60.0
 USER_AGENT = "last30days-skill/1.0 (Claude Code Skill)"
 
 
 class HTTPError(Exception):
     """HTTP request error with status code."""
-    def __init__(self, message: str, status_code: Optional[int] = None, body: Optional[str] = None):
+    def __init__(self, message: str, status_code: Optional[int] = None,
+                 body: Optional[str] = None, retry_after: Optional[float] = None):
         super().__init__(message)
         self.status_code = status_code
         self.body = body
+        self.retry_after = retry_after
+
+
+def _get_retry_delay(attempt: int, is_rate_limit: bool = False,
+                     retry_after: Optional[float] = None) -> float:
+    """Calculate retry delay with exponential backoff and jitter.
+
+    @decision Exponential backoff with separate 429 base — Reddit and X APIs
+    rate-limit aggressively; linear 1-3s was insufficient. 429s use 5s base
+    (vs 2s for other errors) because rate-limit windows are typically 60s.
+    Retry-After honored when present, capped at RETRY_MAX_DELAY.
+
+    Args:
+        attempt: Zero-based attempt number (0 = first retry)
+        is_rate_limit: True if the error was a 429
+        retry_after: Value from Retry-After header, if present
+
+    Returns:
+        Delay in seconds
+    """
+    if retry_after is not None:
+        delay = min(retry_after, RETRY_MAX_DELAY)
+        return delay
+
+    base = RETRY_429_BASE_DELAY if is_rate_limit else RETRY_BASE_DELAY
+    delay = base * (2 ** attempt)
+    delay = min(delay, RETRY_MAX_DELAY)
+    # Add 25% jitter
+    jitter = delay * 0.25 * random.random()
+    return delay + jitter
 
 
 def request(
@@ -85,19 +119,34 @@ def request(
             log(f"HTTP Error {e.code}: {e.reason}")
             if body:
                 log(f"Error body: {body[:500]}")
-            last_error = HTTPError(f"HTTP {e.code}: {e.reason}", e.code, body)
+
+            # Parse Retry-After header if present
+            retry_after = None
+            retry_after_raw = e.headers.get("Retry-After") if e.headers else None
+            if retry_after_raw:
+                try:
+                    retry_after = float(retry_after_raw)
+                except (ValueError, TypeError):
+                    pass
+
+            last_error = HTTPError(f"HTTP {e.code}: {e.reason}", e.code, body, retry_after)
 
             # Don't retry client errors (4xx) except rate limits
             if 400 <= e.code < 500 and e.code != 429:
                 raise last_error
 
             if attempt < retries - 1:
-                time.sleep(RETRY_DELAY * (attempt + 1))
+                is_rate_limit = (e.code == 429)
+                delay = _get_retry_delay(attempt, is_rate_limit, retry_after)
+                log(f"Retrying in {delay:.1f}s (attempt {attempt + 1}/{retries})")
+                time.sleep(delay)
         except urllib.error.URLError as e:
             log(f"URL Error: {e.reason}")
             last_error = HTTPError(f"URL Error: {e.reason}")
             if attempt < retries - 1:
-                time.sleep(RETRY_DELAY * (attempt + 1))
+                delay = _get_retry_delay(attempt)
+                log(f"Retrying in {delay:.1f}s (attempt {attempt + 1}/{retries})")
+                time.sleep(delay)
         except json.JSONDecodeError as e:
             log(f"JSON decode error: {e}")
             last_error = HTTPError(f"Invalid JSON response: {e}")
@@ -107,7 +156,9 @@ def request(
             log(f"Connection error: {type(e).__name__}: {e}")
             last_error = HTTPError(f"Connection error: {type(e).__name__}: {e}")
             if attempt < retries - 1:
-                time.sleep(RETRY_DELAY * (attempt + 1))
+                delay = _get_retry_delay(attempt)
+                log(f"Retrying in {delay:.1f}s (attempt {attempt + 1}/{retries})")
+                time.sleep(delay)
 
     if last_error:
         raise last_error
