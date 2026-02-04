@@ -50,7 +50,14 @@ DEPTH_CONFIG = {
     "deep": (70, 100),
 }
 
+# @decision Prompt includes date range guidance — without it, OpenAI web_search
+# returns mostly old/evergreen Reddit threads which all get dropped by the
+# server-side date filter, yielding 0 results for niche queries. The xAI prompt
+# already had this and returned good results; this brings Reddit parity.
 REDDIT_SEARCH_PROMPT = """Find Reddit discussion threads about: {topic}
+
+IMPORTANT: Focus on threads from {from_date} to {to_date} (last 30 days).
+Strongly prefer RECENT threads. Old threads will be filtered out server-side.
 
 STEP 1: EXTRACT THE CORE SUBJECT
 Get the MAIN NOUN/PRODUCT/TOPIC:
@@ -60,23 +67,23 @@ Get the MAIN NOUN/PRODUCT/TOPIC:
 DO NOT include "best", "top", "tips", "practices", "features" in your search.
 
 STEP 2: SEARCH BROADLY
-Search for the core subject:
-1. "[core subject] site:reddit.com"
-2. "reddit [core subject]"
+Search for the core subject with recency emphasis:
+1. "[core subject] site:reddit.com" (sort by date/recent if possible)
+2. "reddit [core subject] 2026"
 3. "[core subject] reddit"
 
-Return as many relevant threads as you find. We filter by date server-side.
+Return as many RECENT threads as you find. We verify dates server-side.
 
-STEP 3: INCLUDE ALL MATCHES
-- Include ALL threads about the core subject
+STEP 3: INCLUDE ALL RECENT MATCHES
+- Include ALL threads about the core subject from the last 30 days
 - Set date to "YYYY-MM-DD" if you can determine it, otherwise null
 - We verify dates and filter old content server-side
-- DO NOT pre-filter aggressively - include anything relevant
+- Include older threads ONLY if very few recent ones exist
 
 REQUIRED: URLs must contain "/r/" AND "/comments/"
 REJECT: developers.reddit.com, business.reddit.com
 
-Find {min_items}-{max_items} threads. Return MORE rather than fewer.
+Find {min_items}-{max_items} threads. Prefer recent over old.
 
 Return JSON:
 {{
